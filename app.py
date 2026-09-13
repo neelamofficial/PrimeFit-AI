@@ -109,7 +109,7 @@ def db_delete(table, filters):
 def ai(prompt, system="You are PrimeFit AI, a practical fitness and nutrition assistant. Give safe general fitness guidance, avoid medical diagnosis and guaranteed results.", temperature=.35):
     if not groq: return "AI is not configured yet. Add GROQ_API_KEY in Streamlit Secrets."
     try:
-        r=groq.chat.completions.create(model="llama-3.3-70b-versatile",messages=[{"role":"system","content":system},{"role":"user","content":prompt}],temperature=temperature,max_tokens=1800)
+        r=groq.chat.completions.create(model="openai/gpt-oss-120b",messages=[{"role":"system","content":system},{"role":"user","content":prompt}],temperature=temperature,max_tokens=1800)
         return r.choices[0].message.content
     except Exception as e: return f"AI service temporarily unavailable: {e}"
 
