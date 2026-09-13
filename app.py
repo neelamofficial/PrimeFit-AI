@@ -45,14 +45,14 @@ if "admin_mode" not in st.session_state: st.session_state.admin_mode = False
 
 # -------------------- THEME/UI --------------------
 dark = st.session_state.theme == "dark"
-bg = "#070B14" if dark else "#F5F7FB"; card = "#0F172A" if dark else "#FFFFFF"; text = "#F8FAFC" if dark else "#111827"; muted = "#94A3B8" if dark else "#64748B"; border = "rgba(148,163,184,.16)"; accent = "#38BDF8"; purple = "#8B5CF6"
+bg = "#070B14" if dark else "#F5F7FB"; card_bg = "#0F172A" if dark else "#FFFFFF"; text = "#F8FAFC" if dark else "#111827"; muted = "#94A3B8" if dark else "#64748B"; border = "rgba(148,163,184,.16)"; accent = "#38BDF8"; purple = "#8B5CF6"
 st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 html,body,[class*="css"]{{font-family:Inter,sans-serif;background:{bg};color:{text}}}
 .stApp{{background:{bg}}}.block-container{{max-width:1400px;padding-top:1rem}}
 section[data-testid="stSidebar"]{{background:{'#0A1020' if dark else '#FFFFFF'};border-right:1px solid {border}}}
-.pf-card{{background:{card};border:1px solid {border};border-radius:20px;padding:22px;box-shadow:0 12px 35px rgba(0,0,0,.10);transition:.2s}}
+.pf-card{{background:{card_bg};border:1px solid {border};border-radius:20px;padding:22px;box-shadow:0 12px 35px rgba(0,0,0,.10);transition:.2s}}
 .pf-card:hover{{transform:translateY(-2px);box-shadow:0 18px 45px rgba(56,189,248,.08)}}
 .hero{{padding:48px 20px;border-radius:28px;background:linear-gradient(135deg,rgba(56,189,248,.16),rgba(139,92,246,.13));border:1px solid {border};margin-bottom:20px}}
 .grad{{background:linear-gradient(90deg,#38BDF8,#8B5CF6);-webkit-background-clip:text;background-clip:text;color:transparent}}
@@ -70,7 +70,7 @@ def card(title, body="", icon=""):
 def safe_page(name): st.session_state.page = name; st.rerun()
 
 # -------------------- DB HELPERS --------------------
-def db_select(table, filters=None, limit=100, order=None):
+def db_select(table, order=None, filters=None, limit=100):
     if not sb: return []
     try:
         q = sb.table(table).select("*")
@@ -166,7 +166,7 @@ def landing():
     with a: card("Fitness That Fits Your Budget","Enter Rs. 300/day, Rs. 2,000/week or your own monthly budget. PrimeFit AI works within the number you provide.","🇵🇰")
     with b: card("Evidence, not magic","PrimeFit explains why a plan was selected and can point users toward trusted sources. It does not promise a dream physique or guaranteed results.","🔬")
     st.markdown("### Meet the team")
-    team=db_select("team_members",{"is_visible":True},20,"display_order")
+    team=db_select("team_members",order="display_order",filters={"is_visible":True},limit=20)
     if team:
         cs=st.columns(min(4,len(team)))
         for c,m in zip(cs,team):
@@ -196,7 +196,7 @@ def onboarding():
 
 def profile_data():
     if not current_user(): return {}
-    rows=db_select("profiles",{"id":str(current_user().id)},1)
+    rows=db_select("profiles",filters={"id":str(current_user().id)},limit=1)
     return rows[0] if rows else st.session_state.get("profile",{})
 
 def make_workout(p):
@@ -214,8 +214,8 @@ def nutrition(p,basis,budget,preferences,meals):
 # -------------------- USER PAGES --------------------
 def dashboard():
     p=profile_data(); st.title("Dashboard"); st.caption(f"Welcome back, {p.get('name','there')} 👋")
-    logs=db_select("workout_logs",{"user_id":str(current_user().id)},100,"created_at") if current_user() else []
-    progress=db_select("progress_records",{"user_id":str(current_user().id)},100,"recorded_at") if current_user() else []
+    logs=db_select("workout_logs",order="created_at",filters={"user_id":str(current_user().id)},limit=100) if current_user() else []
+    progress=db_select("progress_records",order="recorded_at",filters={"user_id":str(current_user().id)},limit=100) if current_user() else []
     done=len(logs); latest=progress[0].get("weight_kg") if progress else p.get("weight_kg","—")
     a,b,c,d=st.columns(4)
     for col,label,val in [(a,"Workouts completed",done),(b,"Current weight",f"{latest} kg"),(c,"Goal",p.get("goal","Set profile")),(d,"Streak","Keep building")]:
@@ -277,12 +277,12 @@ def nutrition_page():
 
 def progress_page():
     st.title("Progress")
-    uid=str(current_user().id); rows=db_select("progress_records",{"user_id":uid},200,"recorded_at")
+    uid=str(current_user().id); rows=db_select("progress_records",order="recorded_at",filters={"user_id":uid},limit=200)
     with st.form("progress"):
         a,b,c=st.columns(3); w=a.number_input("Weight (kg)",30.,250.,float(profile_data().get("weight_kg") or 65)); strength=b.text_input("Strength / PR note"); consistency=c.number_input("Workout consistency (%)",0.,100.,80.)
         if st.form_submit_button("Log progress",type="primary"):
             db_insert("progress_records",{"user_id":uid,"recorded_at":datetime.utcnow().isoformat(),"weight_kg":w,"strength_note":strength,"consistency":consistency}); st.success("Progress saved."); st.rerun()
-    rows=db_select("progress_records",{"user_id":uid},200,"recorded_at")
+    rows=db_select("progress_records",order="recorded_at",filters={"user_id":uid},limit=200)
     if rows:
         df=pd.DataFrame(rows); st.dataframe(df,use_container_width=True)
         if "weight_kg" in df.columns:
@@ -299,7 +299,7 @@ def coach():
     q=st.chat_input("Ask about your workout, progress, motivation or nutrition...")
     if q:
         st.session_state.messages.append({"role":"user","content":q})
-        context={"profile":p,"recent_progress":db_select("progress_records",{"user_id":str(current_user().id)},20,"recorded_at") if current_user() else []}
+        context={"profile":p,"recent_progress":db_select("progress_records",order="recorded_at",filters={"user_id":str(current_user().id)},limit=20) if current_user() else []}
         ans=ai(f"User context: {json.dumps(context)}\nQuestion: {q}\nGive concise practical advice. Do not diagnose or promise results.")
         st.session_state.messages.append({"role":"assistant","content":ans}); st.rerun()
 
@@ -311,7 +311,7 @@ def profile_page():
 # -------------------- ADMIN --------------------
 def is_admin():
     if not current_user(): return False
-    rows=db_select("admin_roles",{"user_id":str(current_user().id)},1)
+    rows=db_select("admin_roles",filters={"user_id":str(current_user().id)},limit=1)
     return bool(rows)
 
 def admin():
@@ -335,8 +335,8 @@ def admin():
     with tabs[3]:
         st.info("Nutrition content can be expanded here. User budget plans remain dynamically generated from the user's own PKR budget.")
     with tabs[4]:
-        reports=db_select("reports","created_at",limit=500); st.dataframe(pd.DataFrame(reports),use_container_width=True) if reports else st.info("No reports.")
-        posts=db_select("community_posts","created_at",limit=200);
+        reports=db_select("reports",order="created_at",limit=500); st.dataframe(pd.DataFrame(reports),use_container_width=True) if reports else st.info("No reports.")
+        posts=db_select("community_posts",order="created_at",limit=200);
         if posts: st.dataframe(pd.DataFrame(posts),use_container_width=True)
     with tabs[5]:
         logs=db_select("workout_logs",limit=1000); prog=db_select("progress_records",limit=1000)
@@ -354,7 +354,7 @@ def team_management():
         a,b=st.columns(2); name=a.text_input("Name"); role=b.text_input("Role"); bio=st.text_area("Short bio"); linkedin=a.text_input("LinkedIn URL"); instagram=b.text_input("Instagram URL"); xurl=a.text_input("X/Twitter URL"); portfolio=b.text_input("Portfolio URL"); other=a.text_input("Other social URL"); lead=b.checkbox("Project Lead & Idea Owner"); visible=a.checkbox("Visible on public site",True); order=b.number_input("Display order",0,100,0)
         if st.form_submit_button("Add team member",type="primary"):
             db_insert("team_members",{"team_member_id":str(uuid.uuid4()),"name":name,"role":role,"bio":bio,"linkedin_url":linkedin,"instagram_url":instagram,"x_url":xurl,"portfolio_url":portfolio,"other_social_url":other,"is_project_lead":lead,"is_visible":visible,"display_order":order}); st.success("Team member added.")
-    team=db_select("team_members",limit=100,"display_order")
+    team=db_select("team_members",order="display_order",limit=100)
     if team:
         for m in team:
             with st.expander(f"{m.get('name','')} — {m.get('role','')}"):
@@ -369,10 +369,9 @@ def community():
     with st.form("post"):
         txt=st.text_area("Share a fitness update",placeholder="Workout win, milestone, useful tip...")
         if st.form_submit_button("Post",type="primary"):
-            # Basic contact-info guardrail
             if re.search(r"(?:\+?92|03)\d{9}|\b(?:gmail|yahoo|hotmail)\.com\b|https?://",txt,re.I): st.error("For safety, phone numbers, emails and external contact links are not allowed in community posts.")
             elif txt.strip(): db_insert("community_posts",{"user_id":uid,"content":txt.strip(),"created_at":datetime.utcnow().isoformat()}); st.success("Posted!")
-    posts=db_select("community_posts",limit=100,"created_at")
+    posts=db_select("community_posts",order="created_at",limit=100)
     for p in posts:
         card("Community update",p.get("content",""),"💬")
 
