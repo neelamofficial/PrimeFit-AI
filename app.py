@@ -335,7 +335,7 @@ def admin():
     with tabs[3]:
         st.info("Nutrition content can be expanded here. User budget plans remain dynamically generated from the user's own PKR budget.")
     with tabs[4]:
-        reports=db_select("reports",limit=500,"created_at"); st.dataframe(pd.DataFrame(reports),use_container_width=True) if reports else st.info("No reports.")
+        reports=db_select("reports","created_at",limit=500); st.dataframe(pd.DataFrame(reports),use_container_width=True) if reports else st.info("No reports.")
         posts=db_select("community_posts",limit=200,"created_at");
         if posts: st.dataframe(pd.DataFrame(posts),use_container_width=True)
     with tabs[5]:
